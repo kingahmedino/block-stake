@@ -3,7 +3,6 @@ pragma solidity ^0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Math/SafeMath.sol";
 import "./tokens/BlockReward.sol";
 
 /** @title BlockStaking
@@ -12,8 +11,6 @@ import "./tokens/BlockReward.sol";
  * @dev All function calls are currently implemented without side effects
  */
 contract BlockStaking is Ownable {
-    using SafeMath for uint256;
-
     IERC20 private stakeToken;
     BlockReward private rewardToken;
 
@@ -22,6 +19,7 @@ contract BlockStaking is Ownable {
 
     uint256 private accRewardPerShare;
     uint256 private lastAccRewardPerShareBlock;
+    uint256 private constant REWARDS_PRECISION = 1e12;
 
     struct Staker {
         uint256 amount;
@@ -31,8 +29,13 @@ contract BlockStaking is Ownable {
 
     mapping(address => Staker) public stakers;
 
-    constructor(address _stakeToken, uint256 _rewardTokensPerBlock) {
-        stakeToken = IERC20(_stakeToken);
+    constructor(
+        IERC20 _stakeToken,
+        address _rewardToken,
+        uint256 _rewardTokensPerBlock
+    ) {
+        stakeToken = _stakeToken;
+        rewardToken = BlockReward(_rewardToken);
         rewardTokensPerBlock = _rewardTokensPerBlock;
     }
 
@@ -46,14 +49,15 @@ contract BlockStaking is Ownable {
         //1. Update accRewardPerShare
         updateAccRewardPerShare();
         //2. Update user rewards
-        uint256 userRewards = accRewardPerShare.mul(staker.amount).sub(
-            staker.rewardDebt
-        );
+        uint256 userRewards = ((accRewardPerShare / REWARDS_PRECISION) *
+            staker.amount) - staker.rewardDebt;
         staker.pendingRewards += userRewards;
         //3. Update user balance
         staker.amount += _amount;
         //4. Update rewardDebt
-        staker.rewardDebt = staker.amount.mul(accRewardPerShare);
+        staker.rewardDebt =
+            staker.amount *
+            (accRewardPerShare / REWARDS_PRECISION);
         amountOfTokensStaked += _amount;
         stakeToken.transferFrom(msg.sender, address(this), _amount);
     }
@@ -80,11 +84,12 @@ contract BlockStaking is Ownable {
         //1. Update accRewardPerShare
         updateAccRewardPerShare();
         //2. Calculate user rewards to harvest
-        uint256 rewardsToHarvest = accRewardPerShare.mul(staker.amount).sub(
-            staker.rewardDebt
-        );
+        uint256 rewardsToHarvest = ((accRewardPerShare / REWARDS_PRECISION) *
+            staker.amount) - staker.rewardDebt;
         //3. Update rewardDebt
-        staker.rewardDebt = accRewardPerShare.mul(staker.amount);
+        staker.rewardDebt =
+            staker.amount *
+            (accRewardPerShare / REWARDS_PRECISION);
 
         rewardToken.mint(msg.sender, rewardsToHarvest);
     }
@@ -95,10 +100,10 @@ contract BlockStaking is Ownable {
     function updateAccRewardPerShare() private {
         if (amountOfTokensStaked > 0) {
             uint256 blocksDiff = block.number - lastAccRewardPerShareBlock;
-            uint256 rewardsPerShare = blocksDiff.mul(blocksDiff);
-            accRewardPerShare = accRewardPerShare.add(
-                rewardsPerShare.div(amountOfTokensStaked)
-            );
+            uint256 rewardsPerShare = blocksDiff * blocksDiff;
+            accRewardPerShare =
+                accRewardPerShare +
+                ((rewardsPerShare * REWARDS_PRECISION) / amountOfTokensStaked);
         }
         lastAccRewardPerShareBlock = block.number;
     }
