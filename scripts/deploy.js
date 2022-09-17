@@ -4,22 +4,29 @@
 // You can also run a script with `npx hardhat run <script>`. If you do that, Hardhat
 // will compile your contracts, add the Hardhat Runtime Environment's members to the
 // global scope, and execute the script.
+const { parseEther } = require("ethers/lib/utils");
+const { ethers } = require("hardhat");
 const hre = require("hardhat");
 
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-  const unlockTime = currentTimestampInSeconds + ONE_YEAR_IN_SECS;
+  const BlockRewardFactory = await hre.ethers.getContractFactory("BlockReward");
+  blockRewardContract = await BlockRewardFactory.deploy();
 
-  const lockedAmount = hre.ethers.utils.parseEther("1");
-
-  const Lock = await hre.ethers.getContractFactory("Lock");
-  const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
-
-  await lock.deployed();
+  const BlockStakingFactory = await hre.ethers.getContractFactory(
+    "BlockStaking"
+  );
+  blockStakingContract = await BlockStakingFactory.deploy(
+    "0xD6f50C2d25ce920b5C952816bF10ddD80c33Fd5e",
+    blockRewardContract.address,
+    1
+  );
 
   console.log(
-    `Lock with 1 ETH and unlock timestamp ${unlockTime} deployed to ${lock.address}`
+    "BlockReward contract deployed successfully " + blockRewardContract.address
+  );
+  console.log(
+    "BlockStaking contract deployed successfully " +
+      blockStakingContract.address
   );
 }
 
