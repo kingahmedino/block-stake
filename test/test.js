@@ -19,10 +19,13 @@ describe("BlockStaking", function () {
 
     const BlockStakeFactory = await hre.ethers.getContractFactory("BlockStake");
     blockStakeContract = await BlockStakeFactory.deploy();
-    await blockStakeContract.initialize();
 
-    await blockStakeContract.mint(staker1.address, parseEther("500"));
-    await blockStakeContract.mint(staker2.address, parseEther("500"));
+    await blockStakeContract
+      .connect(owner)
+      .mint(staker1.address, parseEther("500"));
+    await blockStakeContract
+      .connect(owner)
+      .mint(staker2.address, parseEther("500"));
 
     const BlockRewardFactory = await hre.ethers.getContractFactory(
       "BlockReward"

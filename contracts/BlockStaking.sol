@@ -29,6 +29,22 @@ contract BlockStaking is Ownable {
 
     mapping(address => Staker) public stakers;
 
+    event Withdrawal(
+        address indexed staker,
+        uint256 amount,
+        uint256 indexed withdrawalBlock
+    );
+    event ClaimRewards(
+        address indexed staker,
+        uint256 rewardHarvested,
+        uint256 indexed rewardBlock
+    );
+    event Deposit(
+        address indexed depositor,
+        uint256 amount,
+        uint256 indexed depositBlock
+    );
+
     constructor(
         IERC20 _stakeToken,
         address _rewardToken,
@@ -49,17 +65,18 @@ contract BlockStaking is Ownable {
         //1. Update accRewardPerShare
         updateAccRewardPerShare();
         //2. Update user rewards
-        uint256 userRewards = ((accRewardPerShare / REWARDS_PRECISION) *
-            staker.amount) - staker.rewardDebt;
+        uint256 userRewards = ((staker.amount * accRewardPerShare) /
+            REWARDS_PRECISION) - staker.rewardDebt;
         staker.pendingRewards += userRewards;
         //3. Update user balance
         staker.amount += _amount;
         //4. Update rewardDebt
         staker.rewardDebt =
-            staker.amount *
-            (accRewardPerShare / REWARDS_PRECISION);
+            (staker.amount * accRewardPerShare) /
+            REWARDS_PRECISION;
         amountOfTokensStaked += _amount;
         stakeToken.transferFrom(msg.sender, address(this), _amount);
+        emit Deposit(msg.sender, _amount, block.number);
     }
 
     /**
@@ -69,10 +86,12 @@ contract BlockStaking is Ownable {
     function withdraw(uint256 _amount) external {
         Staker storage staker = stakers[msg.sender];
         require(staker.amount > 0, "balance is zero");
+        require(staker.amount >= _amount, "amount > balance");
         claimRewards();
         staker.amount -= _amount;
         amountOfTokensStaked -= _amount;
-        stakeToken.transferFrom(address(this), msg.sender, _amount);
+        stakeToken.transfer(msg.sender, _amount);
+        emit Withdrawal(msg.sender, _amount, block.number);
     }
 
     /**
@@ -84,14 +103,23 @@ contract BlockStaking is Ownable {
         //1. Update accRewardPerShare
         updateAccRewardPerShare();
         //2. Calculate user rewards to harvest
-        uint256 rewardsToHarvest = ((accRewardPerShare / REWARDS_PRECISION) *
-            staker.amount) - staker.rewardDebt;
+        uint256 rewardsToHarvest = ((staker.amount * accRewardPerShare) /
+            REWARDS_PRECISION) - staker.rewardDebt;
         //3. Update rewardDebt
         staker.rewardDebt =
-            staker.amount *
-            (accRewardPerShare / REWARDS_PRECISION);
+            (staker.amount * accRewardPerShare) /
+            REWARDS_PRECISION;
+
+        rewardsToHarvest += staker.pendingRewards;
+
+        if (rewardsToHarvest <= 0) {
+            return;
+        }
+
+        staker.pendingRewards = 0;
 
         rewardToken.mint(msg.sender, rewardsToHarvest);
+        emit ClaimRewards(msg.sender, rewardsToHarvest, block.number);
     }
 
     /**
@@ -100,7 +128,7 @@ contract BlockStaking is Ownable {
     function updateAccRewardPerShare() private {
         if (amountOfTokensStaked > 0) {
             uint256 blocksDiff = block.number - lastAccRewardPerShareBlock;
-            uint256 rewardsPerShare = blocksDiff * blocksDiff;
+            uint256 rewardsPerShare = blocksDiff * rewardTokensPerBlock;
             accRewardPerShare =
                 accRewardPerShare +
                 ((rewardsPerShare * REWARDS_PRECISION) / amountOfTokensStaked);
