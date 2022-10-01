@@ -124,6 +124,8 @@ contract BlockStaking is Ownable {
 
     /**
      * @notice Allows anyone to check their rewards
+     * @param _staker The staker's address
+     * @return staker's unharvested rewards
      */
     function checkRewards(address _staker) external view returns (uint256) {
         Staker storage staker = stakers[_staker];
@@ -166,5 +168,30 @@ contract BlockStaking is Ownable {
                 ((rewardsPerShare * REWARDS_PRECISION) / amountOfTokensStaked);
         }
         lastAccRewardPerShareBlock = block.number;
+    }
+
+    /**
+     * @notice Used to get the summary of data in the contract
+     * @return token rewards per block
+     * @return amount of tokens staked
+     * @return accumulated reward per share
+     * @return last reward block
+     */
+    function getSummary()
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        )
+    {
+        return (
+            rewardTokensPerBlock,
+            amountOfTokensStaked,
+            accRewardPerShare,
+            lastAccRewardPerShareBlock
+        );
     }
 }
