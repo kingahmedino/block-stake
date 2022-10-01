@@ -123,6 +123,38 @@ contract BlockStaking is Ownable {
     }
 
     /**
+     * @notice Allows anyone to check their rewards
+     */
+    function checkRewards(address _staker) external view returns (uint256) {
+        Staker storage staker = stakers[_staker];
+        if (staker.amount <= 0) {
+            return 0;
+        }
+        //1. Calculate accRewardPerShareTemp
+        uint256 accRewardPerShareTemp = accRewardPerShare;
+        if (amountOfTokensStaked > 0) {
+            uint256 blocksDiff = block.number - lastAccRewardPerShareBlock;
+            uint256 rewardsPerShare = blocksDiff * rewardTokensPerBlock;
+            accRewardPerShareTemp =
+                accRewardPerShareTemp +
+                ((rewardsPerShare * REWARDS_PRECISION) / amountOfTokensStaked);
+        } else {
+            return 0;
+        }
+        //2. Calculate user rewards to harvest
+        uint256 rewardsToHarvest = ((staker.amount * accRewardPerShareTemp) /
+            REWARDS_PRECISION) - staker.rewardDebt;
+
+        rewardsToHarvest += staker.pendingRewards;
+
+        if (rewardsToHarvest <= 0) {
+            return 0;
+        }
+
+        return rewardsToHarvest;
+    }
+
+    /**
      * @notice Used to update accRewardPerShare
      */
     function updateAccRewardPerShare() private {
